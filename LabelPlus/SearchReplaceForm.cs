@@ -222,7 +222,7 @@ namespace LabelPlus
                 .Insert(lastMatch.MatchIndex, replacement);
 
             workspace.Store.UpdateLabelItemText(lastMatch.FileName, lastMatch.ItemIndex, newText);
-            UndoRedoManager.labelCommandPool.Clear();
+            UndoRedoManager.Clear();
 
             adapter.SelectLabel(lastMatch.FileName, lastMatch.ItemIndex, lastMatch.MatchIndex, replacement.Length);
             ResetLastMatch();
@@ -283,7 +283,7 @@ namespace LabelPlus
             if (changedItems > 0)
             {
                 workspace.Store.OnLabelItemTextChanged();
-                UndoRedoManager.labelCommandPool.Clear();
+                UndoRedoManager.Clear();
             }
             ResetLastMatch();
             MessageBox.Show(

@@ -120,6 +120,8 @@
     <Compile Include="Command\LabelCommand\LabelUndo.cs" />
     <Compile Include="Command\LabelCommand\MoveLabelCommand.cs" />
     <Compile Include="Command\UndoRedoManager.cs" />
+    <Compile Include="Command\AtomAction.cs" />
+    <Compile Include="Command\AtomActionList.cs" />
     <Compile Include="ContextMenuOutsideClickFilter.cs" />
     <Compile Include="DataGridViewAdapter.cs" />
     <Compile Include="DownloadProgressForm.cs">
