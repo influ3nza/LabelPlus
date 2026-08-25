@@ -414,7 +414,14 @@ namespace LabelPlus
 
         private void textbox_KeyDown(object sender, KeyEventArgs e)
         {
-            if (ShortcutManager.Matches(ShortcutManager.LabelNext, e))
+            if (e.KeyCode == Keys.Tab &&
+                (e.Modifiers & (Keys.Control | Keys.Alt)) == Keys.None)
+            {
+                SelectAdjacentTranslation(e.Shift ? -1 : 1, true);
+                e.SuppressKeyPress = true;
+                e.Handled = true;
+            }
+            else if (ShortcutManager.Matches(ShortcutManager.LabelNext, e))
             {
                 listviewapt.SelectedIndex++;
                 if (wsp.setVisualWhenIndexChanged)
@@ -476,10 +483,37 @@ namespace LabelPlus
 
         private void textboxPreviewKeyDown(object sender, PreviewKeyDownEventArgs e)
         {
-            if (ShortcutManager.Matches(ShortcutManager.LabelNext, e))
+            if (e.KeyCode == Keys.Tab || ShortcutManager.Matches(ShortcutManager.LabelNext, e))
             {
                 e.IsInputKey = true;
             }
+        }
+
+        private void SelectAdjacentTranslation(int direction, bool wrap)
+        {
+            int count = listviewapt.Count;
+            if (count == 0)
+                return;
+
+            int current = listviewapt.SelectedIndex;
+            int target;
+            if (current < 0)
+            {
+                target = direction < 0 ? count - 1 : 0;
+            }
+            else
+            {
+                target = current + direction;
+                if (wrap)
+                    target = (target % count + count) % count;
+            }
+
+            if (target < 0 || target >= count)
+                return;
+
+            listviewapt.SelectedIndex = target;
+            if (wsp.setVisualWhenIndexChanged)
+                picview.SetLabelVisual(target);
         }
         private void textbox_TextChanged(object sender, EventArgs e)
         {
