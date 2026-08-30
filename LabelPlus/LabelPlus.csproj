@@ -114,16 +114,9 @@
     </Compile>
     <Compile Include="APIManager.cs" />
     <Compile Include="ChinesePunctuationConverter.cs" />
-    <Compile Include="Command\Command.cs" />
-    <Compile Include="Command\CommandPool.cs" />
-    <Compile Include="Command\Deque.cs" />
-    <Compile Include="Command\LabelCommand\AddLabelCommand.cs" />
-    <Compile Include="Command\LabelCommand\DeleteLabelCommand.cs" />
-    <Compile Include="Command\LabelCommand\LabelCommand.cs" />
-    <Compile Include="Command\LabelCommand\LabelCommandPool.cs" />
-    <Compile Include="Command\LabelCommand\LabelUndo.cs" />
-    <Compile Include="Command\LabelCommand\MoveLabelCommand.cs" />
     <Compile Include="Command\UndoRedoManager.cs" />
+    <Compile Include="Command\AtomAction.cs" />
+    <Compile Include="Command\AtomActionList.cs" />
     <Compile Include="ContextMenuOutsideClickFilter.cs" />
     <Compile Include="DataGridViewAdapter.cs" />
     <Compile Include="DownloadProgressForm.cs">
@@ -312,6 +305,8 @@
 xcopy /y /e /h /c /i "$(SolutionDir)Resource" "$(OutDir)" 1&gt;nul 2&gt;&amp;1
 xcopy /y /e /h /c /i "$(SolutionDir)Resource" "$(SolutionDir)GetRelease" 1&gt;nul 2&gt;&amp;1
 copy /y  "$(TargetPath)" "$(SolutionDir)GetRelease" 1&gt;nul 2&gt;&amp;1
+copy /y "$(TargetDir)*.dll" "$(SolutionDir)GetRelease" 1&gt;nul 2&gt;&amp;1
+if exist "$(TargetPath).config" copy /y "$(TargetPath).config" "$(SolutionDir)GetRelease" 1&gt;nul 2&gt;&amp;1
 echo Publish: The whole package is output to "$(SolutionDir)GetRelease"</PostBuildEvent>
   </PropertyGroup>
   <PropertyGroup>

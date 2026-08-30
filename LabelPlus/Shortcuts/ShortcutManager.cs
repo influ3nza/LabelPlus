@@ -45,10 +45,20 @@ namespace LabelPlus
         public const string LabelPrevious = "nav.labelPrevious";
         public const string LabelNext = "nav.labelNext";
         public const string QuickText = "edit.quickText";
+        public const string CopyToNext = "edit.copyToNext";
         public const string UndoLabel = "edit.undoLabel";
         public const string RedoLabel = "edit.redoLabel";
         public const string DeleteSelectedLabels = "edit.deleteSelectedLabels";
         public const string HideLabels = "view.hideLabels";
+
+        public enum ShortcutStatus
+        {
+            DEFAULT,
+            OK,
+            NEEDS_NORMAL_KEY,
+            NEEDS_MODIFIER,
+            SHORTCUT_CONFLICT,
+        }
 
         static readonly List<ShortcutDefinition> definitions = new List<ShortcutDefinition>
         {
@@ -70,6 +80,7 @@ namespace LabelPlus
             new ShortcutDefinition(LabelPrevious, "上一条标签", "导航", Keys.Control | Keys.Up),
             new ShortcutDefinition(LabelNext, "下一条标签", "导航", Keys.Control | Keys.Enter),
             new ShortcutDefinition(QuickText, "快捷短语", "编辑", Keys.Alt | Keys.A),
+            new ShortcutDefinition(CopyToNext, "快速复制到下一标签", "编辑", Keys.Control | Keys.L),
             new ShortcutDefinition(UndoLabel, "撤销标签操作", "编辑", Keys.Control | Keys.Z),
             new ShortcutDefinition(RedoLabel, "重做标签操作", "编辑", Keys.Control | Keys.Y),
             new ShortcutDefinition(DeleteSelectedLabels, "删除选中标签", "编辑", Keys.Control | Keys.Delete),
@@ -141,7 +152,7 @@ namespace LabelPlus
         public static string ValidateShortcut(string id, Keys shortcut)
         {
             if (shortcut == Keys.None)
-                return "";
+                return StatusToText(ShortcutStatus.OK);
 
             Keys keyCode = shortcut & Keys.KeyCode;
             if (keyCode == Keys.None ||
@@ -149,17 +160,17 @@ namespace LabelPlus
                 keyCode == Keys.ShiftKey ||
                 keyCode == Keys.Menu)
             {
-                return "快捷键需要包含一个普通按键。";
+                return StatusToText(ShortcutStatus.NEEDS_NORMAL_KEY);
             }
 
             if (!HasRequiredModifier(shortcut))
-                return "快捷键必须搭配 Ctrl、Alt 或 Shift。";
+                return StatusToText(ShortcutStatus.NEEDS_MODIFIER);
 
             var conflict = definitions.FirstOrDefault(d => d.Id != id && d.Keys == shortcut);
             if (conflict != null)
-                return "与“" + conflict.Name + "”冲突。";
+                return StatusToText(ShortcutStatus.SHORTCUT_CONFLICT) + conflict.Name;
 
-            return "";
+            return StatusToText(ShortcutStatus.OK);
         }
 
         public static void ResetToDefaults()
@@ -269,6 +280,11 @@ namespace LabelPlus
             return string.Join("+", parts.ToArray());
         }
 
+        public static bool IsStatusOk(string status)
+        {
+            return status == StatusToText(ShortcutStatus.OK);
+        }
+
         static string KeyCodeToText(Keys keyCode)
         {
             switch (keyCode)
@@ -283,6 +299,23 @@ namespace LabelPlus
                     return "OemPeriod";
                 default:
                     return keyCode.ToString();
+            }
+        }
+
+        static string StatusToText(ShortcutStatus status)
+        {
+            switch (status)
+            {
+                case ShortcutStatus.OK:
+                    return "";
+                case ShortcutStatus.NEEDS_NORMAL_KEY:
+                    return "快捷键必须搭配 Ctrl、Alt 或 Shift。";
+                case ShortcutStatus.NEEDS_MODIFIER:
+                    return "快捷键必须搭配 Ctrl、Alt 或 Shift。";
+                case ShortcutStatus.SHORTCUT_CONFLICT:
+                    return "与以下快捷键冲突：";
+                default:
+                    return "快捷键设置无效。" + status;
             }
         }
     }

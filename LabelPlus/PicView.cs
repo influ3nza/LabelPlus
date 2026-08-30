@@ -59,10 +59,12 @@ namespace LabelPlus
             public ActionType Type { get { return type; } }
         }
 
+        // 当前页面文件名
+        string fileName = "";
 
-        //拖拽
+        //拖拽标签
         LabelItem _draggingLabelItem = null;
-        LabelUndo _draggingLabelUndoStart = new LabelUndo();
+        LabelItem _draggingLabelRecord = null;
 
         public delegate void UserActionEventHandler(object sender, LabelUserActionEventArgs e);
         /*Label相关*/
@@ -235,11 +237,12 @@ namespace LabelPlus
          * MakeImage函数对其进行绘制
          * PicView_Paint函数为重画事件，将image中的一部分截取出来，绘制到用户界面上
          */
-        public bool LoadImage(string path)
+        public bool LoadImage(string path, string fileName)
         {
             try
             {
                 Image = Image.FromFile(path);
+                this.fileName = fileName;
                 return true;
             }
             catch { return false; }
@@ -725,13 +728,7 @@ namespace LabelPlus
 
 
                     // 记录 Undo 起点
-                    _draggingLabelUndoStart = new LabelUndo()
-                    {
-                        Index = clickedLabelIndex,
-                        Location = new Location() { X_percent = _draggingLabelItem.X_percent, Y_percent = _draggingLabelItem.Y_percent },
-                        Category = _draggingLabelItem.Category,
-                        Text = _draggingLabelItem.Text
-                    };
+                    _draggingLabelRecord = new LabelItem(_draggingLabelItem);
 
                     var geo = LabelGeometry.CalcLabelGeometry(_draggingLabelItem, _sourceImage, _zoom);
                     float x_percent = (imgPoint.X - geo.Anchor.X) / _sourceImage.Width;
@@ -1136,36 +1133,10 @@ namespace LabelPlus
 
         private void MoveLabelCommand(float x_percent, float y_percent)
         {
-            LabelUndo label = new LabelUndo()
-            {
-                Index = _draggingLabelUndoStart.Index,
-                Location = new Location() { X_percent = x_percent, Y_percent = y_percent },
-
-            };
-            label.LocationPrevious = new LocationPrevious() { X_percent = _draggingLabelUndoStart.Location.X_percent, Y_percent = _draggingLabelUndoStart.Location.Y_percent };
-            MoveLabelCommand moveLabelCommand = new MoveLabelCommand(MoveLabel, UndoMoveLabel, label);
-            UndoRedoManager.LabelCommandPool.Register(moveLabelCommand);
-            moveLabelCommand.Excute();
-        }
-
-        private void MoveLabel(LabelUndo label)
-        {
-            _draggingLabelItem.X_percent = label.Location.X_percent;
-            _draggingLabelItem.Y_percent = label.Location.Y_percent;
-            //Console.WriteLine(dragLabel.X_percent + "    " + dragLabel.Y_percent);
-            //dragLabel = null;
-            if (LabelUserAction != null)
-                LabelUserAction(this, new LabelUserActionEventArgs(label.Index, label.Location.X_percent, label.Location.Y_percent, LabelUserActionEventArgs.ActionType.labelChanged));
-        }
-
-        private void UndoMoveLabel(LabelUndo label)
-        {
-            _draggingLabelItem.X_percent = label.LocationPrevious.X_percent;
-            _draggingLabelItem.Y_percent = label.LocationPrevious.Y_percent;
-            //Console.WriteLine(dragLabel.X_percent + "    " + dragLabel.Y_percent);
-            //dragLabel = null;
-            if (LabelUserAction != null)
-                LabelUserAction(this, new LabelUserActionEventArgs(label.Index, label.LocationPrevious.X_percent, label.LocationPrevious.Y_percent, LabelUserActionEventArgs.ActionType.labelChanged));
+            LabelItem before = new LabelItem(_draggingLabelRecord);
+            LabelItem after = new LabelItem(x_percent, y_percent, before.Text, before.Category);
+            NestedLabelItem anchor = new NestedLabelItem(before, after, fileName, _draggingLabelIndex);
+            UndoRedoManager.RegisterAction(AtomActionType.MOVE_LABEL, anchor).Execute(anchor);
         }
 
         bool tooltop_showing = false;
@@ -1246,12 +1217,6 @@ namespace LabelPlus
             return v;
         }
         private void PicView_MouseUp(object sender, MouseEventArgs e)
-        {
-
-
-
-
-        }
-
+        {}
     }
 }

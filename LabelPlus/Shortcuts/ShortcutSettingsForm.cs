@@ -75,7 +75,7 @@ namespace LabelPlus
                 return;
 
             string message = ShortcutManager.ValidateShortcut(SelectedId, pendingShortcut);
-            if (message != "")
+            if (!ShortcutManager.IsStatusOk(message))
             {
                 SetStatus(message, false);
                 return;

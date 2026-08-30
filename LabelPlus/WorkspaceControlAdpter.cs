@@ -47,6 +47,7 @@ namespace LabelPlus
         WorkMode workMode;
         int itemIndex = -1;
         string fileName = "";
+        bool isExecutingTextEdit;
         bool suppressSetVisualWhenIndexChanged = true;
 
         Point picViewMousePosition;
@@ -67,7 +68,6 @@ namespace LabelPlus
         {
             try
             {
-                UndoRedoManager.labelCommandPool.Clear();
                 if (combo.SelectedIndex != 0)
                     combo.SelectedIndex--;
                 if (wsp.setVisualWhenIndexChanged)
@@ -83,7 +83,6 @@ namespace LabelPlus
         {
             try
             {
-                UndoRedoManager.labelCommandPool.Clear();
                 if (combo.SelectedIndex !=
                     combo.Items.Count - 1)
                     combo.SelectedIndex++;
@@ -100,7 +99,6 @@ namespace LabelPlus
         {
             try
             {
-                UndoRedoManager.labelCommandPool.Clear();
                 if (index >= 0 && index < combo.Items.Count)
                     combo.SelectedIndex = index;
                 if (wsp.setVisualWhenIndexChanged)
@@ -116,12 +114,8 @@ namespace LabelPlus
         {
             try
             {
-                int fileIndex = combo.FindStringExact(targetFileName);
-                if (fileIndex == -1)
+                if (!SelectFile(targetFileName))
                     return false;
-
-                if (combo.SelectedIndex != fileIndex)
-                    combo.SelectedIndex = fileIndex;
 
                 listviewapt.SelectedIndex = targetItemIndex;
 
@@ -140,11 +134,26 @@ namespace LabelPlus
             }
         }
 
+        private bool SelectFile(string targetFileName)
+        {
+            if (string.IsNullOrEmpty(targetFileName))
+                return false;
+
+            int fileIndex = combo.FindStringExact(targetFileName);
+            if (fileIndex == -1)
+                return false;
+
+            if (combo.SelectedIndex != fileIndex)
+                combo.SelectedIndex = fileIndex;
+
+            return true;
+        }
+
         public void NewFile()
         {
             fileName = "";
             picview.Image = null;
-            picview.LoadImage(Application.StartupPath + "\\default_image.png");
+            picview.LoadImage(Application.StartupPath + "\\default_image.png", "");
             textboxgroupbox.Text = "";
             setTextboxText("");
         }
@@ -179,7 +188,7 @@ namespace LabelPlus
                     break;
                 case PicView.LabelUserActionEventArgs.ActionType.rightClickDel:
                     //del
-                    DeleteLabelCommand(e);
+                    ToggleDeleteLabel(e);
                     break;
                 case PicView.LabelUserActionEventArgs.ActionType.middleClickToggleCategory:
                     ToggleLabelCategory(e);
@@ -208,34 +217,27 @@ namespace LabelPlus
 
         private void AddLabelCommand(PicView.LabelUserActionEventArgs e, int category = 1)
         {
-            LabelUndo label = new LabelUndo()
-            {
-                Index = listviewapt.Count,
-                Location = new Location() { X_percent = e.X_percent, Y_percent = e.Y_percent },
-                Category = category,
-            };
-
-            AddLabelCommand addLabelCommand = new AddLabelCommand(AddLabel, DeleteLabel, label);
-            UndoRedoManager.LabelCommandPool.Register(addLabelCommand);
-            addLabelCommand.Excute();
+            LabelItem label = new LabelItem(e.X_percent, e.Y_percent, "", category);
+            int newIndex = LabelFileManager.store[fileName].Count;
+            NestedLabelItem anchor = new NestedLabelItem(null, label, fileName, newIndex);
+            UndoRedoManager.RegisterAction(AtomActionType.ADD_LABEL, anchor).Execute(anchor);
         }
 
-        private void DeleteLabelCommand(PicView.LabelUserActionEventArgs e)
+        private void ToggleDeleteLabel(PicView.LabelUserActionEventArgs e)
         {
             if (e.Index == -1)
                 return;
+            
+            DeleteLabelCommand(fileName, e.Index);
+        }
 
-            LabelUndo label = new LabelUndo()
-            {
-                Index = e.Index,
-                Location = new Location() { X_percent = e.X_percent, Y_percent = e.Y_percent },
-                Category = groupIndex + 1,
-            };
+        private void DeleteLabelCommand(string fileName, int index)
+        {
+            LabelItem label = new LabelItem(LabelFileManager.store[fileName][index]);
 
-            if (!string.IsNullOrEmpty(LabelFileManager.store[fileName][e.Index].Text))
+            if (!string.IsNullOrEmpty(label.Text))
             {
-                label.Text = LabelFileManager.store[fileName][e.Index].Text;
-                if(MessageBox.Show(
+                if (MessageBox.Show(
                     StringResources.GetValue("tip_sure_del_label_with_text"),
                     "Warning",
                     MessageBoxButtons.YesNo,
@@ -245,11 +247,8 @@ namespace LabelPlus
                 }
             }
                 
-
-            label.Category = LabelFileManager.store[fileName][e.Index].Category;
-            DeleteLabelCommand deleteLabelCommand = new DeleteLabelCommand(DeleteLabel, AddLabel, label);
-            UndoRedoManager.LabelCommandPool.Register(deleteLabelCommand);
-            deleteLabelCommand.Excute();
+            NestedLabelItem anchor = new NestedLabelItem(label, null, fileName, index);
+            UndoRedoManager.RegisterAction(AtomActionType.DELETE_LABEL, anchor).Execute(anchor);
         }
 
         private void ToggleLabelCategory(PicView.LabelUserActionEventArgs e)
@@ -257,23 +256,126 @@ namespace LabelPlus
             if (e.Index == -1)
                 return;
 
-            int currentCategory = LabelFileManager.store[fileName][e.Index].Category;
-            int nextCategory = currentCategory == 1 ? 2 : 1;
-
-            if (wsp.Store.UpdateLabelCategory(fileName, e.Index, nextCategory))
-                listviewapt.SelectedIndex = e.Index;
+            ChangeCategoryCommand(fileName, e.Index, 3 - LabelFileManager.store[fileName][e.Index].Category);
         }
 
-        private void AddLabel(LabelUndo label)
+        private void ChangeCategoryCommand(string fileName, int index, int category)
         {
-            wsp.Store.AddLabelItem(FileName, new LabelItem(label.Location.X_percent, label.Location.Y_percent, label.Text, label.Category), label.Index);
-            listviewapt.SelectedIndex = listviewapt.Count - 1;
+            LabelItem before = new LabelItem(LabelFileManager.store[fileName][index]);
+            LabelItem after = new LabelItem(before)
+            {
+                Category = category
+            };
+
+            NestedLabelItem anchor = new NestedLabelItem(before, after, fileName, index);
+            UndoRedoManager.RegisterAction(AtomActionType.EDIT_CATEGORY, anchor).Execute(anchor);
         }
 
-        private void DeleteLabel(LabelUndo label)
+        private void RecoverHandlerAddLabel(NestedLabelItem anchor)
         {
-            wsp.Store.DelLabelItem(FileName, label.Index);
-            listviewapt.SelectedIndex = -1;
+            // 将 anchor 对应页面的标签恢复，跳转到对应页面
+            LabelItem label = anchor.Before ?? anchor.After;
+            if (label != null &&
+                wsp.Store.AddLabelItem(anchor.Filename, new LabelItem(label), anchor.Index) &&
+                SelectFile(anchor.Filename))
+            {
+                listviewapt.SelectedIndex = anchor.Index;
+            }
+        }
+
+        private void RecoverHandlerDeleteLabel(NestedLabelItem anchor)
+        {
+            // 将 anchor 对应页面的标签删除，跳转到对应页面
+            if (wsp.Store.DelLabelItem(anchor.Filename, anchor.Index) &&
+                SelectFile(anchor.Filename))
+            {
+                listviewapt.SelectedIndex = -1;
+            }
+        }
+
+        private void RecoverHandlerCategoryChange(NestedLabelItem anchor)
+        {
+            if (anchor.After != null &&
+                wsp.Store.UpdateLabelCategory(anchor.Filename, anchor.Index, anchor.After.Category) &&
+                SelectFile(anchor.Filename))
+            {
+                listviewapt.SelectedIndex = anchor.Index;
+                picview.SetLabelVisual(anchor.Index);
+            }
+        }
+
+        private void RecoverHandlerCategoryChangeback(NestedLabelItem anchor)
+        {
+            if (anchor.Before != null &&
+                wsp.Store.UpdateLabelCategory(anchor.Filename, anchor.Index, anchor.Before.Category) &&
+                SelectFile(anchor.Filename))
+            {
+                listviewapt.SelectedIndex = anchor.Index;
+                picview.SetLabelVisual(anchor.Index);
+            }
+        }
+
+        private void RecoverHandlerMoveLabel(NestedLabelItem anchor)
+        {
+            if (anchor.After != null &&
+                wsp.Store.UpdateLabelLocation(
+                    anchor.Filename,
+                    anchor.Index,
+                    anchor.After.X_percent,
+                    anchor.After.Y_percent) &&
+                SelectFile(anchor.Filename))
+            {
+                listviewapt.SelectedIndex = anchor.Index;
+            }
+        }
+
+        private void RecoverHandlerMovebackLabel(NestedLabelItem anchor)
+        {
+            if (anchor.Before != null &&
+                wsp.Store.UpdateLabelLocation(
+                    anchor.Filename,
+                    anchor.Index,
+                    anchor.Before.X_percent,
+                    anchor.Before.Y_percent) &&
+                SelectFile(anchor.Filename))
+            {
+                listviewapt.SelectedIndex = anchor.Index;
+                picview.SetLabelVisual(anchor.Index);
+            }
+        }
+
+        private void RecoverHandlerEditText(NestedLabelItem anchor)
+        {
+            if (anchor.After != null &&
+                wsp.Store.UpdateLabelItemText(anchor.Filename, anchor.Index, anchor.After.Text) &&
+                SelectFile(anchor.Filename))
+            {
+                listviewapt.SelectedIndex = anchor.Index;
+                if (!isExecutingTextEdit)
+                {
+                    textbox.Focus();
+                    textbox.SelectionStart = textbox.TextLength;
+                    textbox.SelectionLength = 0;
+                }
+                picview.SetLabelVisual(anchor.Index);
+            }
+        }
+
+        private void RecoverHandlerRerollText(NestedLabelItem anchor)
+        {
+            if (anchor.Before != null &&
+                wsp.Store.UpdateLabelItemText(anchor.Filename, anchor.Index, anchor.Before.Text) &&
+                SelectFile(anchor.Filename))
+            {
+                listviewapt.SelectedIndex = anchor.Index;
+                if (!isExecutingTextEdit)
+                {
+                    textbox.Focus();
+                    textbox.SelectionStart = textbox.TextLength;
+                    textbox.SelectionLength = 0;
+                }
+                picview.SetLabelVisual(anchor.Index);
+            }
         }
 
         private void picViewKeyDown(object sender, KeyEventArgs e)
@@ -297,12 +399,12 @@ namespace LabelPlus
             //else
             if (ShortcutManager.Matches(ShortcutManager.UndoLabel, e))
             {
-                UndoRedoManager.UndoLabel();
+                UndoRedoManager.UndoAction();
                 e.SuppressKeyPress = true;
             }
             else if (ShortcutManager.Matches(ShortcutManager.RedoLabel, e))
             {
-                UndoRedoManager.RedoLabel();
+                UndoRedoManager.RedoAction();
                 e.SuppressKeyPress = true;
             }
         }
@@ -354,6 +456,9 @@ namespace LabelPlus
 
         private void labelItemTextChanged(object sender, EventArgs e)
         {
+            if (isExecutingTextEdit)
+                return;
+
             try
             {
                 listviewapt.ReloadItems(wsp.Store[fileName]);
@@ -450,8 +555,7 @@ namespace LabelPlus
                 page_right();
                 e.SuppressKeyPress = true;
             }
-
-            if (ShortcutManager.Matches(ShortcutManager.QuickText, e))
+            else if (ShortcutManager.Matches(ShortcutManager.QuickText, e))
             {
                 var filter = new ContextMenuOutsideClickFilter(menuquicktext);
                 Application.AddMessageFilter(filter);
@@ -460,6 +564,28 @@ namespace LabelPlus
                     textbox,
                     GetQuickTextMenuLocation(),
                     ToolStripDropDownDirection.BelowRight);
+                e.SuppressKeyPress = true;
+            }
+            else if (ShortcutManager.Matches(ShortcutManager.CopyToNext, e))
+            {
+                var copyContent = textbox.Text;
+                listviewapt.SelectedIndex++;
+                if (wsp.setVisualWhenIndexChanged)
+                {
+                    picview.SetLabelVisual(listviewapt.SelectedIndex);
+                }
+                
+                textbox.Text = copyContent;
+                e.SuppressKeyPress = true;
+            }
+            else if (ShortcutManager.Matches(ShortcutManager.UndoLabel, e))
+            {
+                UndoRedoManager.UndoAction();
+                e.SuppressKeyPress = true;
+            }
+            else if (ShortcutManager.Matches(ShortcutManager.RedoLabel, e))
+            {
+                UndoRedoManager.RedoAction();
                 e.SuppressKeyPress = true;
             }
         }
@@ -523,16 +649,31 @@ namespace LabelPlus
                 return;
             }
 
-            //清空标签池
-            UndoRedoManager.labelCommandPool.Clear();
-
-            wsp.Store.UpdateLabelItemText(fileName, itemIndex, textbox.Text);
+            LabelItem before = new LabelItem(LabelFileManager.store[fileName][itemIndex]);
+            LabelItem after = new LabelItem(before)
+            {
+                Text = textbox.Text
+            };
+            NestedLabelItem anchor = new NestedLabelItem(before, after, fileName, itemIndex);
+            UndoRedoManager.RegisterAction(AtomActionType.EDIT_TEXT, anchor);
+            
+            // 正常编辑时，不需要将光标移动到文本框最后，因此使用变量作区分
+            // 见 RecoverHandlerRerollText/RecoverHandlerEditText
+            isExecutingTextEdit = true;
+            try
+            {
+                wsp.Store.UpdateLabelItemText(fileName, itemIndex, textbox.Text);
+            }
+            finally
+            {
+                isExecutingTextEdit = false;
+            }
         }
 
         private void comboSelectedIndexChanged(object sender, EventArgs e)
         {
             fileName = combo.Text;
-            picview.LoadImage(wsp.DirPath + @"\" + combo.Text);
+            picview.LoadImage(wsp.DirPath + @"\" + combo.Text, fileName);
             labelItemListChanged(null, null);
             listviewapt.SelectedIndex = 0;
         }
@@ -592,13 +733,9 @@ namespace LabelPlus
                 {
                     int index = e.Index[i];
                     if (e.Action == DataGridViewAdapter.UserActionEventArgs.ActionType.setGroup)
-                        wsp.Store.UpdateLabelCategory(fileName, index, e.Value);
+                        ChangeCategoryCommand(fileName, index, e.Value);
                     else if (e.Action == DataGridViewAdapter.UserActionEventArgs.ActionType.del)
-                    {
-                        wsp.Store.DelLabelItem(fileName, index);
-                        //清空标签池
-                        UndoRedoManager.labelCommandPool.Clear();
-                    }
+                        DeleteLabelCommand(fileName, index);
                 }
             }
             picview.Invalidate();
@@ -629,7 +766,7 @@ namespace LabelPlus
             if (quickTextTarget != textbox && !textbox.Focused)
                 return;
 
-            textbox.AppendText(text);
+            textbox.SelectedText = text;
         }
 
         private void quickTextClosed(object sender, ToolStripDropDownClosedEventArgs e)
@@ -765,6 +902,12 @@ namespace LabelPlus
             menuquicktext.Opened += new EventHandler(quickTextOpened);
             menuquicktext.Closed += new ToolStripDropDownClosedEventHandler(quickTextClosed);
             menuquicktext.AutoClose = false;
+
+            UndoRedoManager.RegisterHandler(AtomActionType.ADD_LABEL, RecoverHandlerDeleteLabel, RecoverHandlerAddLabel);
+            UndoRedoManager.RegisterHandler(AtomActionType.DELETE_LABEL, RecoverHandlerAddLabel, RecoverHandlerDeleteLabel);
+            UndoRedoManager.RegisterHandler(AtomActionType.EDIT_CATEGORY, RecoverHandlerCategoryChangeback, RecoverHandlerCategoryChange);
+            UndoRedoManager.RegisterHandler(AtomActionType.MOVE_LABEL, RecoverHandlerMovebackLabel, RecoverHandlerMoveLabel);
+            UndoRedoManager.RegisterHandler(AtomActionType.EDIT_TEXT, RecoverHandlerRerollText, RecoverHandlerEditText);
 
             //groupbuttons = new GroupButtonAdaptor(toolStrip, wsp.GroupDefine);
 

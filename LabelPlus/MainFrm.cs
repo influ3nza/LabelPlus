@@ -433,8 +433,6 @@ namespace LabelPlus
             {
                 if (index < file.Value.Count)
                 {
-                    // SelectLabel switches the image when needed and focuses the right-hand
-                    // translation input with its caret at the beginning.
                     wsp_control_apt.SelectLabel(file.Key, index, 0, 0);
                     return;
                 }
