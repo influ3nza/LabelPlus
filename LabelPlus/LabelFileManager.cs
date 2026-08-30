@@ -272,7 +272,10 @@ namespace LabelPlus
         {
             try
             {
-                addFile(file);
+                if (!addFile(file))
+                    return false;
+
+                UndoRedoManager.Clear();
                 return true;
             }
             catch { return false; }
@@ -308,9 +311,18 @@ namespace LabelPlus
                 store[file][index].Category = category;
                 //OnLabelItemTextChanged();
                 OnLabelItemListChanged();
+                return true;
+            }
+            catch { return false; }
+        }
 
-                //清空标签池
-                UndoRedoManager.labelCommandPool.Clear();
+        public bool UpdateLabelLocation(string file, int index, float xPercent, float yPercent)
+        {
+            try
+            {
+                store[file][index].X_percent = xPercent;
+                store[file][index].Y_percent = yPercent;
+                OnLabelItemListChanged();
                 return true;
             }
             catch { return false; }
@@ -320,7 +332,10 @@ namespace LabelPlus
         {
             try
             {
-                store.Remove(file);
+                if (!store.Remove(file))
+                    return false;
+
+                UndoRedoManager.Clear();
                 //OnFileListChanged();
                 return true;
             }

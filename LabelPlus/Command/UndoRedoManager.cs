@@ -1,90 +1,60 @@
-﻿using System.Diagnostics;
-using System.Linq;
-using System.Reflection;
+﻿using System;
+using System.Collections.Generic;
 
 namespace LabelPlus
 {
-    public static class UndoRedoManager
+    // 原子操作对应的撤销重做方法组
+    public class AtomActionHandler
     {
-        #region fields
-        private static CommandPool commandPool = new CommandPool(100);
-        /// <summary>
-        /// 标签池
-        /// </summary>
-        public static LabelCommandPool labelCommandPool = new LabelCommandPool(100);
-        /// <summary>
-        /// 文本池
-        /// </summary>
-        public static CommandPool textCommandPool = new CommandPool(100);
-
-        #endregion
-
-        #region properties
-
-        /// <summary>
-        /// 命令池
-        /// </summary>
-        public static CommandPool CommandPool
+        public Action<NestedLabelItem> Undo { get; private set; }
+        public Action<NestedLabelItem> Redo { get; private set; }
+        
+        public AtomActionHandler(Action<NestedLabelItem> undo, Action<NestedLabelItem> redo)
         {
-            get
-            {
-                return commandPool;
-            }
+            Undo = undo;
+            Redo = redo;
         }
-        /// <summary>
-        /// 标签池
-        /// </summary>
-        public static LabelCommandPool LabelCommandPool
+    }
+
+    static class UndoRedoManager
+    {
+        private const int DefaultCapacity = 200;
+        private static AtomActionList actions =
+            new AtomActionList(DefaultCapacity);
+        private static Dictionary<AtomActionType, AtomActionHandler> handlers =
+            new Dictionary<AtomActionType, AtomActionHandler>();
+
+        public static void RegisterHandler(AtomActionType actionType, Action<NestedLabelItem> undo, Action<NestedLabelItem> redo)
         {
-            get
-            {
-                return labelCommandPool;
-            }
+            handlers[actionType] = new AtomActionHandler(undo, redo);
         }
 
-        /// <summary>
-        /// 文本池
-        /// </summary>
-        public static CommandPool TextCommandPool
+        public static AtomAction RegisterAction(
+            AtomActionType actionType,
+            NestedLabelItem anchor)
         {
-            get
-            {
-                return textCommandPool;
-            }
-        }
-        #endregion
-        /// <summary>
-        /// 撤销
-        /// </summary>
-        public static void Undo()
-        {
-            string info = commandPool.GetNextUndoCommandInfo();
-            commandPool.Undo();
-        }
-        /// <summary>
-        /// 反撤销
-        /// </summary>
-        public static void Redo()
-        {
-            string info = commandPool.GetNextRedoCommandInfo();
-            commandPool.Redo();
+            AtomActionHandler handler;
+            if (!handlers.TryGetValue(actionType, out handler))
+                throw new InvalidOperationException("未注册该操作类型的撤销/重做处理器。");
+
+            AtomAction action = new AtomAction(actionType, anchor, handler);
+            actions.Register(action);
+            return action;
         }
 
-        /// <summary>
-        /// 撤销标签
-        /// </summary>
-        public static void UndoLabel()
+        public static void UndoAction()
         {
-            string info = labelCommandPool.GetNextUndoCommandInfo();
-            labelCommandPool.Undo();
+            actions.Undo();
         }
-        /// <summary>
-        /// 反撤销标签
-        /// </summary>
-        public static void RedoLabel()
+
+        public static void RedoAction()
         {
-            string info = labelCommandPool.GetNextRedoCommandInfo();
-            labelCommandPool.Redo();
+            actions.Redo();
+        }
+
+        public static void Clear()
+        {
+            actions.Clear();
         }
     }
 }

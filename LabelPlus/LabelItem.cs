@@ -26,5 +26,8 @@ namespace LabelPlus
             Text = text;
             Category = category;
         }
+
+        public LabelItem(LabelItem source)
+            : this(source.X_percent, source.Y_percent, source.Text, source.Category) {}
     }
 }
