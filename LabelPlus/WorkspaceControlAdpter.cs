@@ -47,6 +47,7 @@ namespace LabelPlus
         WorkMode workMode;
         int itemIndex = -1;
         string fileName = "";
+        bool isExecutingTextEdit;
         bool suppressSetVisualWhenIndexChanged = true;
 
         Point picViewMousePosition;
@@ -279,7 +280,6 @@ namespace LabelPlus
                 SelectFile(anchor.Filename))
             {
                 listviewapt.SelectedIndex = anchor.Index;
-                picview.SetLabelVisual(anchor.Index);
             }
         }
 
@@ -326,7 +326,6 @@ namespace LabelPlus
                 SelectFile(anchor.Filename))
             {
                 listviewapt.SelectedIndex = anchor.Index;
-                picview.SetLabelVisual(anchor.Index);
             }
         }
 
@@ -347,22 +346,34 @@ namespace LabelPlus
 
         private void RecoverHandlerEditText(NestedLabelItem anchor)
         {
-            if (anchor.After != null && 
+            if (anchor.After != null &&
                 wsp.Store.UpdateLabelItemText(anchor.Filename, anchor.Index, anchor.After.Text) &&
                 SelectFile(anchor.Filename))
             {
                 listviewapt.SelectedIndex = anchor.Index;
+                if (!isExecutingTextEdit)
+                {
+                    textbox.Focus();
+                    textbox.SelectionStart = textbox.TextLength;
+                    textbox.SelectionLength = 0;
+                }
                 picview.SetLabelVisual(anchor.Index);
             }
         }
 
         private void RecoverHandlerRerollText(NestedLabelItem anchor)
         {
-            if (anchor.Before != null && 
+            if (anchor.Before != null &&
                 wsp.Store.UpdateLabelItemText(anchor.Filename, anchor.Index, anchor.Before.Text) &&
                 SelectFile(anchor.Filename))
             {
                 listviewapt.SelectedIndex = anchor.Index;
+                if (!isExecutingTextEdit)
+                {
+                    textbox.Focus();
+                    textbox.SelectionStart = textbox.TextLength;
+                    textbox.SelectionLength = 0;
+                }
                 picview.SetLabelVisual(anchor.Index);
             }
         }
@@ -445,6 +456,9 @@ namespace LabelPlus
 
         private void labelItemTextChanged(object sender, EventArgs e)
         {
+            if (isExecutingTextEdit)
+                return;
+
             try
             {
                 listviewapt.ReloadItems(wsp.Store[fileName]);
@@ -607,7 +621,19 @@ namespace LabelPlus
                 Text = textbox.Text
             };
             NestedLabelItem anchor = new NestedLabelItem(before, after, fileName, itemIndex);
-            UndoRedoManager.RegisterAction(AtomActionType.EDIT_TEXT, anchor).Execute(anchor);
+            UndoRedoManager.RegisterAction(AtomActionType.EDIT_TEXT, anchor);
+            
+            // 正常编辑时，不需要将光标移动到文本框最后，因此使用变量作区分
+            // 见 RecoverHandlerRerollText/RecoverHandlerEditText
+            isExecutingTextEdit = true;
+            try
+            {
+                wsp.Store.UpdateLabelItemText(fileName, itemIndex, textbox.Text);
+            }
+            finally
+            {
+                isExecutingTextEdit = false;
+            }
         }
 
         private void comboSelectedIndexChanged(object sender, EventArgs e)
